@@ -14,6 +14,7 @@ class ViewController: UIViewController {
     @IBOutlet weak var GalvanicLabel: UILabel!
     @IBOutlet weak var HeartRateLabel: UILabel!
     @IBOutlet weak var AccelerometerLabel: UILabel!
+    @IBOutlet weak var levelImageView: UIImageView!
     
     var calibGalvanicAvg: Double = 0
     var currGalvanicAvg: Double = 0
@@ -39,6 +40,9 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         // Do any additional setup after loading the view, typically from a nib.
         
+        // call static request
+        //getRequestStatic()
+        getExcitementByVenue(1)
         // Set up ClientManager and its delegate
         MSBClientManager.sharedManager().delegate = self
         
@@ -71,8 +75,6 @@ extension ViewController : MSBClientManagerDelegate {
         // debug mesage
         print("Band connected.")
         HeartRateLabel.text = "Connected"
-        // retreive the tile if it exists, or create a new tile
-        // getTile();
         // check current user heart rate consent
         
         if(self.band?.sensorManager.heartRateUserConsent() != MSBUserConsent.Granted) {
@@ -85,7 +87,7 @@ extension ViewController : MSBClientManagerDelegate {
             try self.band?.sensorManager.startHeartRateUpdatesToQueue(nil, withHandler:{
                 (HearRateData: MSBSensorHeartRateData!, error: NSError!) in
                 
-                print(HearRateData.heartRate)
+                //print(HearRateData.heartRate)
                 // self.HeartRateLabel.text = String(HearRateData.heartRate)
                 self.HeartRateArr.append(HearRateData.heartRate)
             })
@@ -97,7 +99,7 @@ extension ViewController : MSBClientManagerDelegate {
             try self.band?.sensorManager.startGSRUpdatesToQueue(nil, withHandler:{
                 (gsrData: MSBSensorGSRData!, error: NSError!) in
                 
-                print(gsrData.resistance)
+                //print(gsrData.resistance)
                 // self.GalvanicLabel.text = String(gsrData.resistance)
                 self.GalvanicArr.append(gsrData.resistance)
             })
@@ -109,7 +111,7 @@ extension ViewController : MSBClientManagerDelegate {
             try self.band?.sensorManager.startAccelerometerUpdatesToQueue(nil, withHandler:{
                 (accelData: MSBSensorAccelerometerData!, error: NSError!) in
                 
-                print(accelData.x)
+                //print(accelData.x)
                 // self.AccelerometerLabel.text = String(accelData.x)
                 let magnitude = sqrt(accelData.x*accelData.x + accelData.y*accelData.y + accelData.z*accelData.z)
                 self.AccelerometerArr.append(magnitude)
@@ -179,49 +181,60 @@ extension ViewController : MSBClientManagerDelegate {
     internal func inferExcitement(){
         
         if(!calibrating){
-            let accelDiff = Double(currAccelerometerStdDev - prevAccelerometerStdDev)
+            let accelDiff = Double(currAccelerometerStdDev - calibAccelerometerStdDev)
+            print("accelDiff: \(accelDiff)")
             
             switch accelDiff {
             case _ where accelDiff < -1:
-                excitement -= 4
+                excitement -= 10
                 break
             case _ where accelDiff < -0.70:
-                excitement -= 3
+                excitement -= 8
                 break
             case _ where accelDiff < -0.3:
-                excitement -= 2
+                excitement -= 6
                 break
             case _ where accelDiff < -0.1:
-                excitement -= 1
+                excitement -= 3
+                break
+            case _ where accelDiff > 1.2:
+                excitement += 20
                 break
             case _ where accelDiff > 1:
-                excitement += 4
+                excitement += 15
                 break
             case _ where accelDiff > 0.70:
-                excitement += 3
+                excitement += 10
                 break
             case _ where accelDiff > 0.3:
-                excitement += 2
+                excitement += 8
                 break
             case _ where accelDiff > 0.1:
-                excitement += 1
+                excitement += 4
                 break
             default:
                 break
             }
             
             
-            let galvanicDiff = Double(currGalvanicAvg - prevGalvanicAvg)
-            excitement -= Int(galvanicDiff / 500.0)
+            let galvanicDiff = Double(calibGalvanicAvg - currGalvanicAvg)
+            excitement -= Int(200000.0/(galvanicDiff))
+            print("galvanicDiff: \(galvanicDiff)")
+            let heartDiff = Double(calibHeartRateAvg - currHeartRateAvg)
+            print("heartDiff: \(heartDiff)")
+            excitement -= Int(heartDiff / 2.0) //todo 3.0
             
-            let heartDiff = Double(currHeartRateAvg - prevHeartRateAvg)
-            excitement += Int(heartDiff / 2.0) //todo 3.0
+            excitement = excitement > 100 ? 100 : excitement
+            excitement = excitement < 0 ? 0 : excitement
             
             AccelerometerLabel.text = String(excitement)
+            print("excitement: \(excitement)")
+            self.postExcitement()
+            excitement = 0
         }
         else{
             self.calibratingPasses += 1
-            if self.calibratingPasses == 10 {
+            if self.calibratingPasses >= 10 {
                 calibrating = false
             }
         }
@@ -238,6 +251,162 @@ extension ViewController : MSBClientManagerDelegate {
     internal func clientManager(clientManager: MSBClientManager!, client: MSBClient!, didFailToConnectWithError error: NSError!) {
         print("Failed to connect to Band.")
         print(error.description)
+    }
+    
+    internal func getRequestStatic(){
+        let configuration = NSURLSessionConfiguration .defaultSessionConfiguration()
+        let session = NSURLSession(configuration: configuration)
+        
+                let urlString = NSString(format: "http://hackcyprus.azurewebsites.net/api/v1")
+        
+        print("get wallet balance url string is \(urlString)")
+        //let url = NSURL(string: urlString as String)
+        let request : NSMutableURLRequest = NSMutableURLRequest()
+        request.URL = NSURL(string: NSString(format: "%@", urlString) as String)
+        request.HTTPMethod = "GET"
+        request.timeoutInterval = 30
+        
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        let dataTask = session.dataTaskWithRequest(request) {
+            (let data: NSData?, let response: NSURLResponse?, let error: NSError?) -> Void in
+            
+            // 1: Check HTTP Response for successful GET request
+            guard let httpResponse = response as? NSHTTPURLResponse, receivedData = data
+                else {
+                    print("error: not a valid http response")
+                    return
+            }
+            
+            switch (httpResponse.statusCode)
+            {
+            case 200:
+                
+                let response = NSString (data: receivedData, encoding: NSUTF8StringEncoding)
+                print("response is \(response)")
+                
+                
+                do {
+                    let getResponse = try NSJSONSerialization.JSONObjectWithData(receivedData, options: .AllowFragments) as? [String : AnyObject]
+                    
+                    //EZLoadingActivity .hide()
+                    print(String(getResponse!["message"]))
+                    // }
+                } catch {
+                    print("error serializing JSON: \(error)")
+                }
+                
+                break
+            case 400:
+                
+                break
+            default:
+                print("wallet GET request got response \(httpResponse.statusCode)")
+            }
+        }
+        dataTask.resume()
+    }
+    
+    internal func getExcitementByVenue(venueId: Int){
+        let configuration = NSURLSessionConfiguration .defaultSessionConfiguration()
+        let session = NSURLSession(configuration: configuration)
+        
+        let urlString = NSString(format: "http://hackcyprus.azurewebsites.net/api/v1?venue_id=\(venueId)")
+        
+        print("get wallet balance url string is \(urlString)")
+        //let url = NSURL(string: urlString as String)
+        let request : NSMutableURLRequest = NSMutableURLRequest()
+        request.URL = NSURL(string: NSString(format: "%@", urlString) as String)
+        request.HTTPMethod = "GET"
+        request.timeoutInterval = 30
+        
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        let dataTask = session.dataTaskWithRequest(request) {
+            (let data: NSData?, let response: NSURLResponse?, let error: NSError?) -> Void in
+            
+            // 1: Check HTTP Response for successful GET request
+            guard let httpResponse = response as? NSHTTPURLResponse, receivedData = data
+                else {
+                    print("error: not a valid http response")
+                    return
+            }
+            
+            switch (httpResponse.statusCode)
+            {
+            case 200:
+                
+                let response = NSString (data: receivedData, encoding: NSUTF8StringEncoding)
+                print("response is \(response)")
+                
+                
+                do {
+                    let getResponse = try NSJSONSerialization.JSONObjectWithData(receivedData, options: .AllowFragments) as? [String : AnyObject]
+                    
+                    //EZLoadingActivity .hide()
+                    print(String(getResponse!["message"]))
+                    // }
+                } catch {
+                    print("error serializing JSON: \(error)")
+                }
+                
+                break
+            case 400:
+                
+                break
+            default:
+                print("wallet GET request got response \(httpResponse.statusCode)")
+            }
+        }
+        dataTask.resume()
+
+    }
+    
+    internal func postExcitement(){
+        let configuration = NSURLSessionConfiguration .defaultSessionConfiguration()
+        let session = NSURLSession(configuration: configuration)
+        
+        let params = ["phone_ID": 1, "excitement_level": excitement, "venue_id":1] as Dictionary<String, AnyObject>
+        
+        let urlString = NSString(format: "http://hackcyprus.azurewebsites.net/api/v1");
+        print("url string is \(urlString)")
+        let request : NSMutableURLRequest = NSMutableURLRequest()
+        request.URL = NSURL(string: NSString(format: "%@", urlString)as String)
+        request.HTTPMethod = "POST"
+        request.timeoutInterval = 30
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.HTTPBody  = try! NSJSONSerialization.dataWithJSONObject(params, options: [])
+        
+        let dataTask = session.dataTaskWithRequest(request)
+        {
+            (let data: NSData?, let response: NSURLResponse?, let error: NSError?) -> Void in
+            // 1: Check HTTP Response for successful GET request
+            guard let httpResponse = response as? NSHTTPURLResponse, receivedData = data
+                else {
+                    print("error: not a valid http response")
+                    return
+            }
+            
+            switch (httpResponse.statusCode)
+            {
+            case 200:
+                
+                let response = NSString (data: receivedData, encoding: NSUTF8StringEncoding)
+                
+                
+                if response == "SUCCESS"
+                {
+                    
+                }
+                
+            default:
+                print("save profile POST request got response \(httpResponse.statusCode)")
+            }
+        }
+        dataTask.resume()
     }
     
 }
