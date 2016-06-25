@@ -15,16 +15,25 @@ class ViewController: UIViewController {
     @IBOutlet weak var HeartRateLabel: UILabel!
     @IBOutlet weak var AccelerometerLabel: UILabel!
     
+    var calibGalvanicAvg: Double = 0
     var currGalvanicAvg: Double = 0
     var prevGalvanicAvg: Double = 0
+    
+    var calibHeartRateAvg: Double = 0
     var currHeartRateAvg: Double = 0
     var prevHeartRateAvg: Double = 0
+    
+    var calibAccelerometerStdDev: Double = 0
     var currAccelerometerStdDev: Double = 0
     var prevAccelerometerStdDev: Double = 0
     
     var GalvanicArr = [UInt]()
     var HeartRateArr = [UInt]()
     var AccelerometerArr = [Double]()
+    
+    var excitement = 50
+    var calibratingPasses = 10
+    var calibrating = true
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -43,16 +52,17 @@ class ViewController: UIViewController {
         }
         
     }
-
+    
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
     }
-
-
+    
+    
 }
 
 extension ViewController : MSBClientManagerDelegate {
+    
     ////////////////////////////////
     //MARK: Protocol Conformation
     ////////////////
@@ -109,23 +119,47 @@ extension ViewController : MSBClientManagerDelegate {
         }
         
         _ = NSTimer.scheduledTimerWithTimeInterval(4.0, target: self, selector: #selector(ViewController.reportPeriodResult), userInfo: nil, repeats: true)
-
+        
         
     }
     
     internal func reportPeriodResult()-> Void{
-        currGalvanicAvg = Double(GalvanicArr.reduce(0, combine: +)) / Double(GalvanicArr.count)
-        currHeartRateAvg = Double(HeartRateArr.reduce(0, combine: +)) / Double(HeartRateArr.count)
         
-        let AccelCount = AccelerometerArr.count
-        if AccelCount != 0 {
-            let accelAvg = Double(AccelerometerArr.reduce(0, combine: +)) / Double(AccelCount)
+        if calibrating {
+            let passGalvanic = Double(GalvanicArr.reduce(0, combine: +)) / Double(GalvanicArr.count)
+            let passHeart = Double(HeartRateArr.reduce(0, combine: +)) / Double(HeartRateArr.count)
+            var passAccel = 0.0
             
-            let sumOfSquaredAvgDiff = AccelerometerArr.map { pow($0 - accelAvg, 2.0)}.reduce(0, combine: {$0 + $1})
-            currAccelerometerStdDev = sqrt(sumOfSquaredAvgDiff / Double(AccelCount))
+            let AccelCount = AccelerometerArr.count
+            if AccelCount != 0 {
+                let accelAvg = Double(AccelerometerArr.reduce(0, combine: +)) / Double(AccelCount)
+                
+                let sumOfSquaredAvgDiff = AccelerometerArr.map { pow($0 - accelAvg, 2.0)}.reduce(0, combine: {$0 + $1})
+                passAccel = sqrt(sumOfSquaredAvgDiff / Double(AccelCount))
+            }
+            
+            calibGalvanicAvg = (calibGalvanicAvg*Double(calibratingPasses) + passGalvanic) / Double(calibratingPasses + 1)
+            
+            calibHeartRateAvg = (calibHeartRateAvg*Double(calibratingPasses) + passHeart) / Double(calibratingPasses + 1)
+            
+            calibAccelerometerStdDev = (calibAccelerometerStdDev*Double(calibratingPasses) + passAccel) / Double(calibratingPasses + 1)
         }
+        else{
+            currGalvanicAvg = Double(GalvanicArr.reduce(0, combine: +)) / Double(GalvanicArr.count)
+            currHeartRateAvg = Double(HeartRateArr.reduce(0, combine: +)) / Double(HeartRateArr.count)
+            
+            let AccelCount = AccelerometerArr.count
+            if AccelCount != 0 {
+                let accelAvg = Double(AccelerometerArr.reduce(0, combine: +)) / Double(AccelCount)
+                
+                let sumOfSquaredAvgDiff = AccelerometerArr.map { pow($0 - accelAvg, 2.0)}.reduce(0, combine: {$0 + $1})
+                currAccelerometerStdDev = sqrt(sumOfSquaredAvgDiff / Double(AccelCount))
+            }
+        }
+                //
+        inferExcitement()
         // update UI
-        AccelerometerLabel.text = String(currAccelerometerStdDev)
+        // AccelerometerLabel.text = String(currAccelerometerStdDev)
         self.HeartRateLabel.text = String(currHeartRateAvg)
         self.GalvanicLabel.text = String(currGalvanicAvg)
         // copy to previous
@@ -140,6 +174,57 @@ extension ViewController : MSBClientManagerDelegate {
         currHeartRateAvg = 0.0
         currAccelerometerStdDev = 0.0
         
+    }
+    
+    internal func inferExcitement(){
+        
+        if(!calibrating){
+            let accelDiff = Double(currAccelerometerStdDev - prevAccelerometerStdDev)
+            
+            switch accelDiff {
+            case _ where accelDiff < -1:
+                excitement -= 4
+                break
+            case _ where accelDiff < -0.70:
+                excitement -= 3
+                break
+            case _ where accelDiff < -0.3:
+                excitement -= 2
+                break
+            case _ where accelDiff < -0.1:
+                excitement -= 1
+                break
+            case _ where accelDiff > 1:
+                excitement += 4
+                break
+            case _ where accelDiff > 0.70:
+                excitement += 3
+                break
+            case _ where accelDiff > 0.3:
+                excitement += 2
+                break
+            case _ where accelDiff > 0.1:
+                excitement += 1
+                break
+            default:
+                break
+            }
+            
+            
+            let galvanicDiff = Double(currGalvanicAvg - prevGalvanicAvg)
+            excitement -= Int(galvanicDiff / 500.0)
+            
+            let heartDiff = Double(currHeartRateAvg - prevHeartRateAvg)
+            excitement += Int(heartDiff / 2.0) //todo 3.0
+            
+            AccelerometerLabel.text = String(excitement)
+        }
+        else{
+            self.calibratingPasses += 1
+            if self.calibratingPasses == 10 {
+                calibrating = false
+            }
+        }
     }
     
     func combinator(accumulator: UInt, current: UInt) -> UInt {
