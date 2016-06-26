@@ -6,5 +6,6 @@
 #define Band_Swift_Bridging_Header_h
 
 #import <MicrosoftBandKit_iOS/MicrosoftBandKit_iOS.h>
+#import <EstimoteSDK/EstimoteSDK.h>
 
 #endif

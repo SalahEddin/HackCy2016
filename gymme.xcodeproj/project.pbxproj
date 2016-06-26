@@ -10,6 +10,7 @@
 		2E2A23B7626A4AF03DE9D561 /* Pods_gymme.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 90770C1538E996E21A3DFE22 /* Pods_gymme.framework */; };
 		4E22B8601D1E62C400A9D5AB /* ExcitementEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E22B85F1D1E62C400A9D5AB /* ExcitementEntry.swift */; };
 		4E22B8621D1E6E2300A9D5AB /* ClubTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E22B8611D1E6E2300A9D5AB /* ClubTableViewCell.swift */; };
+		4E22B8751D1EE58100A9D5AB /* indoorsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E22B8741D1EE58100A9D5AB /* indoorsViewController.swift */; };
 		4E3242F91D1DAB6B007855F0 /* CoreBluetooth.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4E3242F81D1DAB6B007855F0 /* CoreBluetooth.framework */; };
 		4E3243041D1DE3A4007855F0 /* MicrosoftBandKit_iOS.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4E3243031D1DE3A4007855F0 /* MicrosoftBandKit_iOS.framework */; };
 		4E3696F51D1D946D0024197A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E3696F41D1D946D0024197A /* AppDelegate.swift */; };
@@ -24,6 +25,7 @@
 		4DA987A7E4B4F9BE9C6F72AD /* Pods-gymme.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-gymme.debug.xcconfig"; path = "Pods/Target Support Files/Pods-gymme/Pods-gymme.debug.xcconfig"; sourceTree = "<group>"; };
 		4E22B85F1D1E62C400A9D5AB /* ExcitementEntry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ExcitementEntry.swift; sourceTree = "<group>"; };
 		4E22B8611D1E6E2300A9D5AB /* ClubTableViewCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ClubTableViewCell.swift; sourceTree = "<group>"; };
+		4E22B8741D1EE58100A9D5AB /* indoorsViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = indoorsViewController.swift; sourceTree = "<group>"; };
 		4E3242F81D1DAB6B007855F0 /* CoreBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreBluetooth.framework; path = System/Library/Frameworks/CoreBluetooth.framework; sourceTree = SDKROOT; };
 		4E3242FA1D1DABD7007855F0 /* MicrosoftBandKit_iOS.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MicrosoftBandKit_iOS.framework; path = ../../Downloads/MicrosoftBandKit_iOS_SAMPLES_1.3.20419.1/MicrosoftBandKit_iOS.framework; sourceTree = "<group>"; };
 		4E3242FC1D1DAE89007855F0 /* gymme-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "gymme-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -78,6 +80,7 @@
 				4E3696F41D1D946D0024197A /* AppDelegate.swift */,
 				4E3696F61D1D946D0024197A /* ViewController.swift */,
 				4E3696F81D1D946D0024197A /* Main.storyboard */,
+				4E22B8741D1EE58100A9D5AB /* indoorsViewController.swift */,
 				4E22B8611D1E6E2300A9D5AB /* ClubTableViewCell.swift */,
 				4E3696FE1D1D946D0024197A /* Assets.xcassets */,
 				4E3697001D1D946D0024197A /* LaunchScreen.storyboard */,
@@ -233,6 +236,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4E22B8601D1E62C400A9D5AB /* ExcitementEntry.swift in Sources */,
+				4E22B8751D1EE58100A9D5AB /* indoorsViewController.swift in Sources */,
 				4E3696FD1D1D946D0024197A /* gymme.xcdatamodeld in Sources */,
 				4E3696F71D1D946D0024197A /* ViewController.swift in Sources */,
 				4E22B8621D1E6E2300A9D5AB /* ClubTableViewCell.swift in Sources */,

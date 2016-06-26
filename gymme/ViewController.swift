@@ -8,13 +8,14 @@
 
 import UIKit
 
-class ViewController: UIViewController {
+class ViewController: UIViewController, ESTBeaconManagerDelegate {
     
     var band: MSBClient?
     @IBOutlet weak var GalvanicLabel: UILabel!
     @IBOutlet weak var HeartRateLabel: UILabel!
     @IBOutlet weak var AccelerometerLabel: UILabel!
-    @IBOutlet weak var levelImageView: UIImageView!
+    @IBOutlet weak var calibratingLabel: UILabel!
+    @IBOutlet weak var calibratingProgressBar: UIProgressView!
     
     var calibGalvanicAvg: Double = 0
     var currGalvanicAvg: Double = 0
@@ -31,18 +32,40 @@ class ViewController: UIViewController {
     var GalvanicArr = [UInt]()
     var HeartRateArr = [UInt]()
     var AccelerometerArr = [Double]()
+    var HeartRateLocked = false
     
     var excitement = 50
     var calibratingPasses = 10
     var calibrating = true
     
+    //MARK: Estimote
+    var venueId: Int = 1 // default venue
+    let beaconManager = ESTBeaconManager()
+    let beaconRegion = CLBeaconRegion(
+        proximityUUID: NSUUID(UUIDString: "B9407F30-F5F8-466E-AFF9-25556B57FE6D")!,
+        identifier: "")
+    
+    let venuesByBeacons = [
+        "42601:47751":1,
+        "50693:56686":2,
+        "20015:51325":3,
+        "62270:31254":4
+    ]
+    
+    
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view, typically from a nib.
         
+        // 3. Set the beacon manager's delegate
+        self.beaconManager.delegate = self
+        // 4. We need to request this authorization for every beacon manager
+        self.beaconManager.requestAlwaysAuthorization()
+        
         // call static request
         //getRequestStatic()
-        getExcitementByVenue(1)
+        //getExcitementByVenue(1)
         // Set up ClientManager and its delegate
         MSBClientManager.sharedManager().delegate = self
         
@@ -70,6 +93,7 @@ extension ViewController : MSBClientManagerDelegate {
     ////////////////////////////////
     //MARK: Protocol Conformation
     ////////////////
+    
     // MARK: Client Manager Delegates
     internal func clientManager(clientManager: MSBClientManager!, clientDidConnect client: MSBClient!) {
         // debug mesage
@@ -88,37 +112,34 @@ extension ViewController : MSBClientManagerDelegate {
                 (HearRateData: MSBSensorHeartRateData!, error: NSError!) in
                 
                 //print(HearRateData.heartRate)
-                // self.HeartRateLabel.text = String(HearRateData.heartRate)
-                self.HeartRateArr.append(HearRateData.heartRate)
+                if(HearRateData.quality == MSBSensorHeartRateQuality.Locked){
+                    self.HeartRateArr.append(HearRateData.heartRate)
+                    self.HeartRateLocked = true
+                }
             })
         }
-        catch{
-        }
+        catch{}
         
         do{
             try self.band?.sensorManager.startGSRUpdatesToQueue(nil, withHandler:{
                 (gsrData: MSBSensorGSRData!, error: NSError!) in
                 
                 //print(gsrData.resistance)
-                // self.GalvanicLabel.text = String(gsrData.resistance)
                 self.GalvanicArr.append(gsrData.resistance)
             })
         }
-        catch{
-        }
+        catch{ }
         
         do{
             try self.band?.sensorManager.startAccelerometerUpdatesToQueue(nil, withHandler:{
                 (accelData: MSBSensorAccelerometerData!, error: NSError!) in
                 
                 //print(accelData.x)
-                // self.AccelerometerLabel.text = String(accelData.x)
                 let magnitude = sqrt(accelData.x*accelData.x + accelData.y*accelData.y + accelData.z*accelData.z)
                 self.AccelerometerArr.append(magnitude)
             })
         }
-        catch{
-        }
+        catch{}
         
         _ = NSTimer.scheduledTimerWithTimeInterval(4.0, target: self, selector: #selector(ViewController.reportPeriodResult), userInfo: nil, repeats: true)
         
@@ -129,7 +150,8 @@ extension ViewController : MSBClientManagerDelegate {
         
         if calibrating {
             let passGalvanic = Double(GalvanicArr.reduce(0, combine: +)) / Double(GalvanicArr.count)
-            let passHeart = Double(HeartRateArr.reduce(0, combine: +)) / Double(HeartRateArr.count)
+            let passHeart = Double(HeartRateArr.reduce(0, combine: +)) / Double(HeartRateArr.count);
+            
             var passAccel = 0.0
             
             let AccelCount = AccelerometerArr.count
@@ -142,9 +164,22 @@ extension ViewController : MSBClientManagerDelegate {
             
             calibGalvanicAvg = (calibGalvanicAvg*Double(calibratingPasses) + passGalvanic) / Double(calibratingPasses + 1)
             
-            calibHeartRateAvg = (calibHeartRateAvg*Double(calibratingPasses) + passHeart) / Double(calibratingPasses + 1)
+            if(HeartRateLocked){
+                calibHeartRateAvg = (calibHeartRateAvg*Double(calibratingPasses) + passHeart) / Double(calibratingPasses + 1)
+            }
+            else{
+                // todo
+            }
             
             calibAccelerometerStdDev = (calibAccelerometerStdDev*Double(calibratingPasses) + passAccel) / Double(calibratingPasses + 1)
+            
+            self.calibratingPasses += 1
+            calibratingProgressBar.progress = 1.0 / Float(calibratingPasses)
+            if self.calibratingPasses >= 10 {
+                calibratingLabel.hidden = true
+                calibratingProgressBar.hidden = true
+                calibrating = false
+            }
         }
         else{
             currGalvanicAvg = Double(GalvanicArr.reduce(0, combine: +)) / Double(GalvanicArr.count)
@@ -157,12 +192,14 @@ extension ViewController : MSBClientManagerDelegate {
                 let sumOfSquaredAvgDiff = AccelerometerArr.map { pow($0 - accelAvg, 2.0)}.reduce(0, combine: {$0 + $1})
                 currAccelerometerStdDev = sqrt(sumOfSquaredAvgDiff / Double(AccelCount))
             }
+            
+            inferExcitement()
+            
         }
-                //
-        inferExcitement()
+        
         // update UI
         // AccelerometerLabel.text = String(currAccelerometerStdDev)
-        self.HeartRateLabel.text = String(currHeartRateAvg)
+        self.HeartRateLabel.text = "HR: \(String(currHeartRateAvg)), Accel: \(String(currAccelerometerStdDev)) "
         self.GalvanicLabel.text = String(currGalvanicAvg)
         // copy to previous
         prevGalvanicAvg = currGalvanicAvg
@@ -180,64 +217,58 @@ extension ViewController : MSBClientManagerDelegate {
     
     internal func inferExcitement(){
         
-        if(!calibrating){
-            let accelDiff = Double(currAccelerometerStdDev - calibAccelerometerStdDev)
-            print("accelDiff: \(accelDiff)")
-            
-            switch accelDiff {
-            case _ where accelDiff < -1:
-                excitement -= 10
-                break
-            case _ where accelDiff < -0.70:
-                excitement -= 8
-                break
-            case _ where accelDiff < -0.3:
-                excitement -= 6
-                break
-            case _ where accelDiff < -0.1:
-                excitement -= 3
-                break
-            case _ where accelDiff > 1.2:
-                excitement += 20
-                break
-            case _ where accelDiff > 1:
-                excitement += 15
-                break
-            case _ where accelDiff > 0.70:
-                excitement += 10
-                break
-            case _ where accelDiff > 0.3:
-                excitement += 8
-                break
-            case _ where accelDiff > 0.1:
-                excitement += 4
-                break
-            default:
-                break
-            }
-            
-            
-            let galvanicDiff = Double(calibGalvanicAvg - currGalvanicAvg)
-            excitement -= Int(200000.0/(galvanicDiff))
-            print("galvanicDiff: \(galvanicDiff)")
-            let heartDiff = Double(calibHeartRateAvg - currHeartRateAvg)
+        let accelDiff = Double(currAccelerometerStdDev - calibAccelerometerStdDev)
+        print("accelDiff: \(accelDiff)")
+        
+        switch accelDiff {
+        case _ where accelDiff < -1:
+            excitement -= 10
+            break
+        case _ where accelDiff < -0.70:
+            excitement -= 8
+            break
+        case _ where accelDiff < -0.3:
+            excitement -= 6
+            break
+        case _ where accelDiff < -0.1:
+            excitement -= 3
+            break
+        case _ where accelDiff > 1.2:
+            excitement += 20
+            break
+        case _ where accelDiff > 1:
+            excitement += 15
+            break
+        case _ where accelDiff > 0.70:
+            excitement += 10
+            break
+        case _ where accelDiff > 0.3:
+            excitement += 8
+            break
+        case _ where accelDiff > 0.1:
+            excitement += 4
+            break
+        default:
+            break
+        }
+        let galvanicDiff = Double(calibGalvanicAvg - currGalvanicAvg)
+        excitement -= Int(200000.0/(galvanicDiff))
+        print("galvanicDiff: \(galvanicDiff)")
+        
+        var heartDiff: Double
+        if(!HeartRateLocked){
+            heartDiff = Double(calibHeartRateAvg - currHeartRateAvg)
             print("heartDiff: \(heartDiff)")
-            excitement -= Int(heartDiff / 2.0) //todo 3.0
-            
-            excitement = excitement > 100 ? 100 : excitement
-            excitement = excitement < 0 ? 0 : excitement
-            
-            AccelerometerLabel.text = String(excitement)
-            print("excitement: \(excitement)")
-            self.postExcitement()
-            excitement = 0
+            excitement -= Int(heartDiff / 1.2)
         }
-        else{
-            self.calibratingPasses += 1
-            if self.calibratingPasses >= 10 {
-                calibrating = false
-            }
-        }
+    
+        excitement = excitement > 100 ? 100 : excitement
+        excitement = excitement < 0 ? 0 : excitement
+        
+        AccelerometerLabel.text = String(excitement)
+        print("excitement: \(excitement)")
+        self.postExcitement()
+        excitement = 0
     }
     
     func combinator(accumulator: UInt, current: UInt) -> UInt {
@@ -257,7 +288,7 @@ extension ViewController : MSBClientManagerDelegate {
         let configuration = NSURLSessionConfiguration .defaultSessionConfiguration()
         let session = NSURLSession(configuration: configuration)
         
-                let urlString = NSString(format: "http://hackcyprus.azurewebsites.net/api/v1")
+        let urlString = NSString(format: "http://hackcyprus.azurewebsites.net/api/v1")
         
         print("get wallet balance url string is \(urlString)")
         //let url = NSURL(string: urlString as String)
@@ -344,14 +375,10 @@ extension ViewController : MSBClientManagerDelegate {
                 
                 do {
                     let getResponse = try NSJSONSerialization.JSONObjectWithData(receivedData, options: .AllowFragments) as? [String : AnyObject]
-                    
-                    //EZLoadingActivity .hide()
                     print(String(getResponse!["message"]))
-                    // }
                 } catch {
                     print("error serializing JSON: \(error)")
                 }
-                
                 break
             case 400:
                 
@@ -361,14 +388,14 @@ extension ViewController : MSBClientManagerDelegate {
             }
         }
         dataTask.resume()
-
+        
     }
     
     internal func postExcitement(){
         let configuration = NSURLSessionConfiguration .defaultSessionConfiguration()
         let session = NSURLSession(configuration: configuration)
         
-        let params = ["phone_ID": 1, "excitement_level": excitement, "venue_id":1] as Dictionary<String, AnyObject>
+        let params = ["phone_ID": 1, "excitement_level": excitement, "venue_id": venueId] as Dictionary<String, AnyObject>
         
         let urlString = NSString(format: "http://hackcyprus.azurewebsites.net/api/v1");
         print("url string is \(urlString)")
@@ -399,7 +426,7 @@ extension ViewController : MSBClientManagerDelegate {
                 
                 if response == "SUCCESS"
                 {
-                    
+                    print("success posting")
                 }
                 
             default:
@@ -407,6 +434,37 @@ extension ViewController : MSBClientManagerDelegate {
             }
         }
         dataTask.resume()
+    }
+}
+
+extension ViewController {
+    override func viewWillAppear(animated: Bool) {
+        super.viewWillAppear(animated)
+        self.beaconManager.startRangingBeaconsInRegion(self.beaconRegion)
+    }
+    
+    override func viewDidDisappear(animated: Bool) {
+        super.viewDidDisappear(animated)
+        self.beaconManager.stopRangingBeaconsInRegion(self.beaconRegion)
+    }
+    
+    func placesNearBeacon(beacon: CLBeacon) -> [Int]? {
+        let beaconKey = "\(beacon.major):\(beacon.minor)"
+        if let places = self.venuesByBeacons[beaconKey] {
+            let sortedPlaces = Array(arrayLiteral: places).sort() { $0 < $1 }.map { $0 }
+            return sortedPlaces
+        }
+        return nil
+    }
+    
+    func beaconManager(manager: AnyObject, didRangeBeacons beacons: [CLBeacon],
+                       inRegion region: CLBeaconRegion) {
+        if let nearestBeacon = beacons.first, places = placesNearBeacon(nearestBeacon) {
+            //venueLabel.text = String(places)
+            // TODO: update the UI here
+            venueId = places[0]
+            print("venue:\(places)")
+        }
     }
     
 }
